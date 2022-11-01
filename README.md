@@ -11,11 +11,11 @@ Workflow to select complementary conservation areas based on different biodivers
 
 ## Codes
 
-### calculate_metrics_per_pu
+### Calculate Metrics Per PU
 
 Code to generate planing units and calculate metrics per planning unit
 
-### ranking_planning_units_only
+### Ranking Planning Units Only
 
 Code to rank planning units according to pareto function. The code performs the following actions:
 
@@ -26,6 +26,7 @@ Code to rank planning units according to pareto function. The code performs the 
 5. Save planning unites
 
 ### Calcular conectividad
+
 
 
 ## Authors and contributors
