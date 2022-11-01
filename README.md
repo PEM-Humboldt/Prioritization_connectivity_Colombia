@@ -3,11 +3,11 @@ Workflow to select complementary conservation areas based on different biodivers
 
 ## Data
 
-Ecoregions map
-Human footprint map
-RUNAP
-Any spatial layers used as features in the objective function. Examples: Species Richness, Carbon index, water index
-Cost layer
+* Ecoregions map
+* Human footprint map
+* RUNAP
+* Any spatial layers used as features in the objective function. Examples: Species Richness, Carbon index, water index
+* Cost layer
 
 ## Codes
 
