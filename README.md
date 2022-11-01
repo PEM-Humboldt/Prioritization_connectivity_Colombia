@@ -1,4 +1,4 @@
-# Prioritization_connectivity_Colombia
+# Prioritization connectivity Colombia
 Workflow to select complementary conservation areas based on different biodiversity attributes and connectivity metrics
 
 ## Data
@@ -28,3 +28,6 @@ Code to rank planning units according to pareto function. The code performs the 
 ### Calcular conectividad
 
 
+## Authors and contributors
+
+Andres Felipe Suarez Castro 
