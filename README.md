@@ -6,10 +6,14 @@ Workflow to select complementary conservation areas based on different biodivers
 * Ecoregions map
 * Human footprint map
 * RUNAP
-* Any spatial layers used as features in the objective function. Examples: Species Richness, Carbon index, water index
+* Any spatial layers used as features in the objective function. Examples: SDMs, Species Richness, Carbon index, water index
 * Cost layer
 
 ## Codes
+
+### Gap analysis
+
+Code to calculate the percentage of the distribution area protected for each species and the total area that should be protected in the objective function
 
 ### Calculate Metrics Per PU
 
@@ -27,8 +31,8 @@ Code to rank planning units according to pareto function. The code performs the 
 
 ### Calcular conectividad
 
-
+Calculate connectivity for different scenarios using Makurhini
 
 ## Authors and contributors
 
-Andres Felipe Suarez Castro 
+Andres Felipe Suarez Castro a.suarezcastro@griffith.edu.au
