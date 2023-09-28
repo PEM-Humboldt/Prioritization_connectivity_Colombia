@@ -13,33 +13,22 @@ library(gdistance)
 library(rgeos)
 library(rgdal)
 
-setwd("")
+setwd("C:/Data/50Reefs/Felipe/iucn")
 
 
 #load ecorregions
 
-ecorregions_COL<-readOGR("./Regiones_bioticas/regiones_bioticos/Regiones_Bióticas.shp")
-
-#list of ecorregions
-eco_list<-split(ecorregions_COL,ecorregions_COL$Region)
-
-#human footprint
-
-human.footprint<-raster(paste0("./human_footprint","/","IHEH_2018.tif"))
-
-#PNN
-PNN<- readOGR("./RUNAP/RUNAP_ajust_proj.shp")
-PNN <- gBuffer(PNN, byid=TRUE, width=0)
-PNN<-st_as_sf(PNN)
-PNN$area<-st_area(PNN)
-PNN$area<-as.numeric(PNN$area)
-PNN<-PNN[c("id_pnn","area")]
+#ecorregions_COL<-readOGR("./Regiones_bioticas/regiones_bioticos/Regiones_Bióticas.shp")
 
 #prepare grid calculation data
-grid_cals<-list.files("./Regiones_bioticas/grid_calculations",full.names = T)
-grid_cals<-lapply(grid_cals,read.csv)
-alldata<-do.call(rbind.fill,grid_cals)
-head(alldata)
+grid_cals_f<-list.files("./NATGEO/grid_calculations_NATGEO",full.names = T)
+grid_cals<-lapply(grid_cals_f,read.csv)
+#alldata<-do.call(rbind.fill,grid_cals)
+#head(alldata)
+
+reg<-strsplit(grid_cals_f,"grid_")
+reg<-lapply(reg,function(x)strsplit(x[[3]],"_calculations"))
+reg<-lapply(reg,function(x)return(x[[1]][[1]]))
 
 #define objective function
 # Scenario-- theta can be only from 0-1 as it is a weight... 'para' = weight  
@@ -61,50 +50,32 @@ obj_fun<-function(para,#weigths
 #column names represent the objective values that will be generated
 # in the loop for each ecorregion
 #
-scenarios<-data.frame(objective_1= c("carbon_ratio","carbon_ratio","carbon_ratio",
-                                     "water_ratio","water_ratio","corridors_rent"),
-                      objective_2= c("water_ratio","corridors_rent","biod_ratio",
-                                     "corridors_rent",
-                                     "biod_ratio","biod_ratio"),
-                      index_1 = c("carbon_index_300m","carbon_index_300m","carbon_index_300m",
-                                  "water_index_300m","water_index_300m","corridors"),
-                      index_2 = c("water_index_300m","corridors","biod",
-                                  "corridors","biod","biod"))
-
+scenarios<-data.frame(objective_1= c("sp_126_ratio","sp_585_ratio",
+                                     "sp_present_ratio"),      
+                      objective_2= c("corridors_rent"),
+                      valuesobj1 = c("sp_126","sp_585",
+                                     "sp_present"),
+                      valuesobj2 = c("corridors"))
 
 # % to protect
 target = 30 
 
-for(i in 2:length(eco_list)){
+for(i in 2:length(grid_cals)){
   
-  #get human footprint per ecorregion####
-  hf_eco<-crop(human.footprint,extent(eco_list[[i]]),snap = "near")
-  #protected areas inside ecorregions
-  PNN_eco<-crop(as(PNN,"Spatial"),extent(eco_list[[i]]),snap = "near")
-  PNN.polygon<- rasterize(PNN_eco,hf_eco, mask=TRUE) #crops to polygon edge & converts to raster
-  PNN.polygon[which(!is.na(PNN.polygon[]))]<-1
-  
-  #create raster ecorregion######
-  
-  ecorregion.raster<- rasterize(eco_list[[i]],hf_eco, mask=TRUE)
-  ecorregion.raster[which(is.na(ecorregion.raster[]))]<--1
-  eco_raster<-ecorregion.raster
-  eco_raster[which(ecorregion.raster[]>-1)]<-1
-  eco_raster[which(PNN.polygon[]>0)]<-2
-  eco_raster[which(ecorregion.raster[]==-1)]<--1
-  
-  #extract values
-  ecorregion_df<-as.data.frame(rasterToPoints(eco_raster))
-  
+  ecorregion_df<-grid_cals[[i]]
   #calculate proportion area protected per ecorregion####
   
-  eco_protected<-nrow(subset(ecorregion_df,ecorregion_df[3] == 2))
-  eco_total<-nrow(subset(ecorregion_df,ecorregion_df[3] > 0))
+  eco_protected<-nrow(subset(ecorregion_df,!is.na(ecorregion_df$PNN)))
+  eco_total<-nrow(ecorregion_df)
   prop_protected<-(eco_protected/eco_total)*100
   
   #read data of planning units####
   
-  s_po_df<-subset(alldata,alldata$Region == eco_list[[i]]$Region)
+  ecorregion_df$Region<-reg[[i]]
+  
+  s_po_df<-ecorregion_df
+  
+  s_po_df<-rename(s_po_df,"total_rent_300m" = "MEAN")
   
   #remove 0s from lant rent values so we do not have to divide by 0
   hello<-subset(s_po_df, s_po_df$total_rent_300m > 0 & s_po_df$total_rent_300m < 1)
@@ -127,13 +98,13 @@ for(i in 2:length(eco_list)){
   #that these cells have the lowest chance of being selected in 
   #the prioritization analysis
   
-  s_po_df[which(is.na(s_po_df$corridors_col_200k)),"corridors_col_200k"]<-2e5
-  s_po_df[which(s_po_df$corridors_col_200k > 5e4),"corridors_col_200k"]<-2e5
+  s_po_df[which(is.na(s_po_df$corridors)),"corridors"]<-2e5
+  s_po_df[which(s_po_df$corridors > 5e4),"corridors"]<-2e5
   
   #transform corridor values
   #transform to meters
-  s_po_df$corridors_col_200k<-s_po_df$corridors_col_200k/1000
-  s_po_df$corridors<- range01(s_po_df$corridors_col_200k)
+  s_po_df$corridors<-s_po_df$corridors/1000
+  s_po_df$corridors<- range01(s_po_df$corridors)
   s_po_df$corridors<-1-s_po_df$corridors
   
   #only consider forest corridors
@@ -141,46 +112,52 @@ for(i in 2:length(eco_list)){
   
   #divide by rent
   s_po_df$corridors_rent<-s_po_df$corridors/s_po_df$total_rent_300m
-  s_po_df[which(s_po_df$corridors_col_200k == 2e5/1000),"corridors_rent"]<-min(s_po_df$corridors_rent, na.rm = T)
+  s_po_df[which(s_po_df$corridors == 2e5/1000),"corridors_rent"]<-min(s_po_df$corridors_rent, na.rm = T)
   
   
   #standardize ES and biodiversity values####
-  s_po_df$carbon_ratio<-s_po_df$carbon_index_300m/s_po_df$total_rent_300m
-  s_po_df$water_ratio<-s_po_df$water_index_300m/s_po_df$total_rent_300m
   #biod values
-  s_po_df$biod_ratio<- range01(s_po_df$biod)
-  s_po_df$biod_ratio<-s_po_df$biod_ratio/s_po_df$total_rent_300m
+  s_po_df$sp_126_ratio<- range01(s_po_df$sp_126)
+  s_po_df$sp_126_ratio<-s_po_df$sp_126/s_po_df$total_rent_300m
+  
+  s_po_df$sp_585_ratio<- range01(s_po_df$sp_585)
+  s_po_df$sp_585_ratio<-s_po_df$sp_585/s_po_df$total_rent_300m
+  
+  s_po_df$sp_present_ratio<- range01(s_po_df$sp_present)
+  s_po_df$sp_present_ratio<-s_po_df$sp_present/s_po_df$total_rent_300m
+  
+
+  #change NAs to 0
+  s_po_df[which(is.na(s_po_df$corridors)),"corridors"]<-0
+  s_po_df[which(is.na(s_po_df$sp_126)),"sp_126"]<-0
+  s_po_df[which(is.na(s_po_df$sp_585)),"sp_585"]<-0
+  s_po_df[which(is.na(s_po_df$sp_present)),"sp_present"]<-0
   
   #change NAs to 0
-  s_po_df[which(is.na(s_po_df$carbon_ratio)),"carbon_ratio"]<-0
-  s_po_df[which(is.na(s_po_df$water_ratio)),"water_ratio"]<-0
-  s_po_df[which(is.na(s_po_df$biod_ratio)),"biod_ratio"]<-0
+  s_po_df[which(is.na(s_po_df$corridors_rent)),"corridors_rent"]<-0
+  s_po_df[which(is.na(s_po_df$sp_126_ratio)),"sp_126_ratio"]<-0
+  s_po_df[which(is.na(s_po_df$sp_585_ratio)),"sp_585_ratio"]<-0
+  s_po_df[which(is.na(s_po_df$sp_present_ratio)),"sp_present_ratio"]<-0
   
   #-------------------- Set up benefit-cost ratio targeting model -----------------
   #budget here represents the total area that needs to be protected to reach target
-  budget <- (eco_total*((target - prop_protected)/100))*0.3*0.3
-  print(budget)
-  print(prop_protected)
+  budget <- (eco_total*((target - prop_protected)/100))#*0.3*0.3
+  #print(budget)
+  #print(prop_protected)
   
-  #READ GRIDS and PNN around ecorregion###
-  grid_eco<-readOGR(paste0("./Regiones_bioticas/grids_eco/grid_eco_",
-                           eco_list[[i]]$Region, "_comp_PNN.shp"))
+  s_po_df<-subset(s_po_df,is.na(s_po_df$PNN))
   
-  #subset planning units outside PNN
-  grid_eco<-subset(grid_eco,grid_eco$PNN == 0)
+  #####
   
-  #select PUs outside PAs
-  s_po_df<-subset(s_po_df,s_po_df$PNN == 0)
+  grid_eco<-readOGR(paste0("NATGEO/grids_eco_NATGEO/grid_eco_",
+                           s_po_df$Region[[1]],"_calc.shp"))
 
-  
-  #pb <- txtProgressBar(min = 0, max = length(budget), style = 3) #To check the progress
-  
   #Apply objective function to all the scenario combinations
   systime1 <- Sys.time()
   conn_results<-list()
   for (j in 1:nrow(scenarios)) {
     #apply function to all dataframe rows using all the parameter values
-    vector_t<- apply(s_po_df, 1, function(x)obj_fun(para,x[scenarios[j,1]],x[scenarios[j,2]])) #apply obj function
+    vector_t<- apply(s_po_df[c(scenarios[j,1],scenarios[j,2])], 1, function(x)obj_fun(para,x[scenarios[j,1]],x[scenarios[j,2]])) #apply obj function
     Scenario_ES<-(as.data.frame(vector_t))
     Scenario_ES<-as.data.frame(t(Scenario_ES))
     colnames(Scenario_ES)<-para
@@ -197,6 +174,11 @@ for(i in 2:length(eco_list)){
     #To save results for pareto (obj_1, obj_2, theta and budget)
     pareto_results<-data.frame(matrix(0,0,4)) 
     colnames(pareto_results)<-c(paste0(colnames(s_po_df[scenarios[j,1]]),"_sum"), paste0(colnames(s_po_df[scenarios[j,2]]),"_sum"), "para", "budget")
+    
+    write.csv(Scenario_ES,paste0("NATGEO/ranking_analysis/",
+                                 "eco_",s_po_df$Region[[1]],"_",colnames(s_po_df[scenarios[j,1]]),
+                                 "_",colnames(s_po_df[scenarios[j,2]]),
+                                 "_allpara.csv"))
     
     #rank PUs based on the results of the objective function for each weight
     for (p in 2:(length(para) + 1)){
@@ -240,33 +222,37 @@ for(i in 2:length(eco_list)){
     #has the highest weight, whereas "_weight_1_30.csv" means that the 
     #first scenario has the highest weight
     
-    write.csv(pareto_results, paste0("calculations_ranking_analysis/50k/target_30/",
-                                     "eco_",eco_list[[i]]$Region,"_",colnames(s_po_df[scenarios[j,1]]),
+    write.csv(pareto_results, paste0("NATGEO/ranking_analysis/",
+                                     "eco_",s_po_df$Region[[1]],"_",colnames(s_po_df[scenarios[j,1]]),
                                      "_",colnames(s_po_df[scenarios[j,2]]),
                                      "_para_30.csv"))
     
-    write.csv(df_para[[length(df_para)]], paste0("calculations_ranking_analysis/50k/target_30/",
-                                                 "eco_",eco_list[[i]]$Region,"_",colnames(s_po_df[scenarios[j,1]]),"_",colnames(s_po_df[scenarios[j,2]]),
+    write.csv(df_para[[length(df_para)]], paste0("NATGEO/ranking_analysis/",
+                                                 "eco_",s_po_df$Region[[1]],"_",colnames(s_po_df[scenarios[j,1]]),"_",colnames(s_po_df[scenarios[j,2]]),
                                                  "_weight_1_30.csv"))
-    write.csv(df_para[[1]], paste0("calculations_ranking_analysis/50k/target_30/",
-                                   "eco_",eco_list[[i]]$Region,"_",colnames(s_po_df[scenarios[j,1]]),"_",colnames(s_po_df[scenarios[j,2]]),
+    write.csv(df_para[[1]], paste0("NATGEO/ranking_analysis/",
+                                   "eco_",s_po_df$Region[[1]],"_",colnames(s_po_df[scenarios[j,1]]),"_",colnames(s_po_df[scenarios[j,2]]),
                                    "_weight_last.csv"))
-  
+    
+    grid_eco<-readOGR(paste0("NATGEO/grids_eco_NATGEO/grid_eco_",
+                             s_po_df$Region[[1]],"_calc.shp"))
+    
+    
+    g_po<-subset(grid_eco,grid_eco$ID %in% df_para[[length(df_para)]]$ID)
+    g_po_2<-subset(grid_eco,grid_eco$ID %in% df_para[[1]]$ID)
+    
+    writeOGR(g_po_2,"NATGEO/corridors_shp_30_1",
+             paste0("eco_",s_po_df$Region[[1]],"_",colnames(s_po_df[scenarios[j,2]]),"_",
+                    colnames(s_po_df[scenarios[j,1]]),"_30"),
+             driver="ESRI Shapefile")
+    writeOGR(g_po,"NATGEO/corridors_shp_30_1",
+             paste0("eco_",s_po_df$Region[[1]],"_",colnames(s_po_df[scenarios[j,1]]),"_",
+                    colnames(s_po_df[scenarios[j,2]]),"_30"),
+             driver="ESRI Shapefile")
     
   }
   
   #select PUs from each scenario and save them as shp
   
-  g_po<-subset(grid_eco,grid_eco$ID %in% df_para[[length(df_para)]]$ID)
-  g_po_2<-subset(grid_eco,grid_eco$ID %in% df_para[[1]]$ID)
-  
-  writeOGR(g_po_2,"./calculations_ranking_analysis/50k/target_30/corridors_shp_30",
-           paste0("eco_",i,"_",colnames(s_po_df[scenarios[j,2]]),"_",
-                  colnames(s_po_df[scenarios[j,1]]),"_30"),
-           driver="ESRI Shapefile")
-  writeOGR(g_po,"./calculations_ranking_analysis/50k/target_30/corridors_shp_30",
-           paste0("eco_",i,"_",colnames(s_po_df[scenarios[j,1]]),"_",
-                  colnames(s_po_df[scenarios[j,2]]),"_30"),
-           driver="ESRI Shapefile")
   print(i)
 }
